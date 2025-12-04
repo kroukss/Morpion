@@ -27,9 +27,9 @@
       }
     </style>
 
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js"></script>
+    <!-- Firebase v8 (compatibilité totale avec l'exemple) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   </head>
   <body>
     <h1>Morpion Online</h1>
@@ -44,7 +44,12 @@
     <div id="board"></div>
 
     <script>
-      // ⚠️ Mets ici ton propre firebaseConfig
+      /* ==========================================================
+    CONFIG FIREBASE
+   ----------------------------------------------------------
+   Mets ici ton propre firebaseConfig
+   ========================================================== */
+
       const firebaseConfig = {
         apiKey: "AIzaSyBq-MCOR7rBOzYl_6-hOiQCO2Gmz-hVxF0",
         authDomain: "morpion-online-29505.firebaseapp.com",
@@ -54,63 +59,100 @@
         messagingSenderId: "92135715792",
         appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
       };
+
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database();
+
+      /* ==========================================================
+    VARIABLES GLOBALES (⚠️ doivent être ici !)
+   ========================================================== */
 
       let gameId = null;
       let player = null;
       let grid = ["", "", "", "", "", "", "", "", ""];
 
+      /* ==========================================================
+    CRÉER UNE PARTIE
+   ========================================================== */
+
       function createGame() {
-        gameId = Math.random().toString(36).substr(2, 5);
+        gameId = Math.random().toString(36).substr(2, 5); // code de 5 caractères
         player = "X";
+
         document.getElementById("status").innerText =
           "Code de la partie : " + gameId;
 
-        db.ref("games/" + gameId).set({ grid, turn: "X" });
+        db.ref("games/" + gameId).set({
+          grid: grid,
+          turn: "X",
+        });
+
         listenGame();
         renderBoard();
       }
+
+      /* ==========================================================
+    REJOINDRE UNE PARTIE
+   ========================================================== */
 
       function joinGame() {
-        gameId = document.getElementById("joinCode").value;
+        gameId = document.getElementById("joinCode").value.trim();
+        if (!gameId) return alert("Entre un code valide");
+
         player = "O";
-        document.getElementById("status").innerText = "Vous êtes O";
+        document.getElementById("status").innerText =
+          "Vous êtes O — Partie : " + gameId;
 
         listenGame();
         renderBoard();
       }
 
+      /* ==========================================================
+    ÉCOUTE TEMPS RÉEL FIREBASE
+   ========================================================== */
+
       function listenGame() {
-        db.ref("games/" + gameId).on("value", (snap) => {
-          if (!snap.exists()) return;
-          const data = snap.val();
+        db.ref("games/" + gameId).on("value", (snapshot) => {
+          if (!snapshot.exists()) return;
+
+          const data = snapshot.val();
           grid = data.grid;
+
           renderBoard();
 
-          if (checkWin("X")) alert("X a gagné !");
-          if (checkWin("O")) alert("O a gagné !");
+          if (checkWin("X")) setTimeout(() => alert("X a gagné !"), 50);
+          if (checkWin("O")) setTimeout(() => alert("O a gagné !"), 50);
         });
       }
 
-      function play(i) {
+      /* ==========================================================
+    JOUER UN COUP
+   ========================================================== */
+
+      function play(index) {
         db.ref("games/" + gameId)
           .once("value")
-          .then((snap) => {
-            const data = snap.val();
-            if (data.grid[i] !== "") return;
-            if (data.turn !== player) return;
+          .then((snapshot) => {
+            const data = snapshot.val();
 
-            data.grid[i] = player;
+            if (data.grid[index] !== "") return; // case déjà jouée
+            if (data.turn !== player) return; // pas ton tour
+
+            data.grid[index] = player;
             data.turn = player === "X" ? "O" : "X";
 
             db.ref("games/" + gameId).set(data);
           });
       }
 
+      /* ==========================================================
+    AFFICHAGE DU PLATEAU
+   ========================================================== */
+
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
+
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
@@ -119,6 +161,10 @@
           board.appendChild(cell);
         }
       }
+
+      /* ==========================================================
+    DÉTECTION VICTOIRE
+   ========================================================== */
 
       function checkWin(p) {
         const wins = [
@@ -131,7 +177,7 @@
           [0, 4, 8],
           [2, 4, 6],
         ];
-        return wins.some((w) => w.every((i) => grid[i] === p));
+        return wins.some((line) => line.every((i) => grid[i] === p));
       }
     </script>
   </body>
