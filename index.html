@@ -71,8 +71,6 @@
         font-size: 1rem;
         color: #777;
       }
-
-      /* Modal du vainqueur */
       #winnerModal {
         display: none;
         position: fixed;
@@ -131,6 +129,14 @@
     </div>
 
     <div>
+      <label>Taille de la grille :</label>
+      <select id="gridSelect">
+        <option value="3">3 x 3</option>
+        <option value="5">5 x 5</option>
+      </select>
+    </div>
+
+    <div>
       <button onclick="createGame()">Créer une partie</button>
       <input id="joinCode" placeholder="Code de la partie" />
       <button onclick="joinGame()">Rejoindre</button>
@@ -143,7 +149,6 @@
     <h3 id="turnStatus"></h3>
     <div id="board"></div>
 
-    <!-- Modal vainqueur -->
     <div id="winnerModal">
       <div id="winnerContent">
         <h2>Gagnant</h2>
@@ -151,7 +156,6 @@
       </div>
     </div>
 
-    <!-- Caméra et snapshot -->
     <video id="camera" autoplay style="display: none"></video>
     <canvas id="snapshot" style="display: none"></canvas>
 
@@ -159,23 +163,28 @@
       let gameId = null;
       let player = null;
       let mode = "human";
-      let grid = ["", "", "", "", "", "", "", "", ""];
+      let gridSize = 3;
+      let grid = [];
 
       // Créer partie
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
         player = "X";
         mode = document.getElementById("modeSelect").value;
+        gridSize = parseInt(document.getElementById("gridSelect").value);
+        grid = Array(gridSize * gridSize).fill("");
+
         document.getElementById(
           "status"
         ).innerText = `Code de la partie : ${gameId} (Vous êtes X) - Mode : ${
           mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
-        }`;
+        } - Grille ${gridSize}x${gridSize}`;
 
         db.ref("games/" + gameId).set({
           grid: grid,
           turn: "X",
           mode: mode,
+          size: gridSize,
           players: { X: true },
         });
 
@@ -200,11 +209,14 @@
 
             player = "O";
             mode = data.mode || "human";
+            gridSize = data.size || 3;
+            grid = data.grid || Array(gridSize * gridSize).fill("");
+
             document.getElementById(
               "status"
             ).innerText = `Vous êtes O — Partie : ${gameId} - Mode : ${
               mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
-            }`;
+            } - Grille ${gridSize}x${gridSize}`;
 
             db.ref("games/" + gameId + "/players").update({ O: true });
 
@@ -229,13 +241,14 @@
           if (checkWin("X")) {
             showWinnerPhoto("X");
             document.getElementById("restartBtn").style.display =
-              "inline-block";
+              mode === "superkarim" ? "inline-block" : "none";
             return;
           }
           if (checkWin("O")) {
             showWinnerPhoto("O");
             document.getElementById("restartBtn").style.display =
-              "inline-block";
+              mode === "superkarim" ? "inline-block" : "none";
+            showWinnerPhoto("O");
             return;
           }
 
@@ -277,8 +290,8 @@
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
-        board.style.gridTemplateColumns = "repeat(3,1fr)";
-        for (let i = 0; i < 9; i++) {
+        board.style.gridTemplateColumns = `repeat(${gridSize},1fr)`;
+        for (let i = 0; i < grid.length; i++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
           if (grid[i] === "X") cell.classList.add("x");
@@ -291,25 +304,41 @@
 
       // Vérifier victoire
       function checkWin(p, b = grid) {
-        const wins = [
-          [0, 1, 2],
-          [3, 4, 5],
-          [6, 7, 8],
-          [0, 3, 6],
-          [1, 4, 7],
-          [2, 5, 8],
-          [0, 4, 8],
-          [2, 4, 6],
-        ];
+        const wins = [];
+        if (gridSize === 3) {
+          wins.push(
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [0, 3, 6],
+            [1, 4, 7],
+            [2, 5, 8],
+            [0, 4, 8],
+            [2, 4, 6]
+          );
+        } else {
+          // 5x5 lignes/colonnes/diagonales
+          for (let i = 0; i < 5; i++) {
+            wins.push([i * 5, i * 5 + 1, i * 5 + 2, i * 5 + 3, i * 5 + 4]); // lignes
+            wins.push([i, i + 5, i + 10, i + 15, i + 20]); // colonnes
+          }
+          wins.push([0, 6, 12, 18, 24], [4, 8, 12, 16, 20]); // diagonales
+        }
         return wins.some((line) => line.every((i) => b[i] === p));
       }
 
-      // Super Karim (IA invincible)
+      // Super Karim (IA invincible optimisée)
       function superKarimMove() {
-        if (checkWin("X") || checkWin("O") || grid.every((c) => c !== ""))
+        if (
+          checkWin("X") ||
+          checkWin("O") ||
+          grid.every((c) => "X,O".includes(c))
+        )
           return;
-        const best = minimax(grid, "O");
+        const best = minimax(grid, "O", 0, 4);
         const index = best.index;
+        if (index === undefined) return;
+
         db.ref("games/" + gameId)
           .once("value")
           .then((snapshot) => {
@@ -321,23 +350,31 @@
           });
       }
 
-      function minimax(board, playerTurn) {
+      // Minimax limité en profondeur
+      function minimax(board, playerTurn, depth, maxDepth) {
+        if (checkWin("X", board)) return { score: -10 + depth };
+        if (checkWin("O", board)) return { score: 10 - depth };
+        if (board.every((c) => "X,O".includes(c)) || depth >= maxDepth)
+          return { score: 0 };
+
         const avail = board
-          .map((v, i) => (v === "" ? i : null))
+          .map((v, i) => (v === "" + v ? i : null))
           .filter((v) => v !== null);
-        if (checkWin("X", board)) return { score: -10 };
-        if (checkWin("O", board)) return { score: 10 };
-        if (avail.length === 0) return { score: 0 };
-        const moves = [];
+        let moves = [];
         for (let i of avail) {
-          const newBoard = board.slice();
-          newBoard[i] = playerTurn;
-          const result = minimax(newBoard, playerTurn === "O" ? "X" : "O");
+          board[i] = playerTurn;
+          const result = minimax(
+            board,
+            playerTurn === "O" ? "X" : "O",
+            depth + 1,
+            maxDepth
+          );
           moves.push({ index: i, score: result.score });
+          board[i] = ""; // backtrack
         }
-        return playerTurn === "O"
-          ? moves.reduce((a, b) => (a.score > b.score ? a : b))
-          : moves.reduce((a, b) => (a.score < b.score ? a : b));
+        if (playerTurn === "O")
+          return moves.reduce((a, b) => (a.score > b.score ? a : b));
+        else return moves.reduce((a, b) => (a.score < b.score ? a : b));
       }
 
       // Caméra
@@ -363,7 +400,7 @@
         }
       }
 
-      // Afficher photo pour les 2 joueurs
+      // Afficher photo du vainqueur
       function showWinnerPhoto(winner) {
         db.ref("games/" + gameId + "/photos/" + winner)
           .once("value")
@@ -374,8 +411,6 @@
               const img = document.getElementById("winnerPhoto");
               img.src = photo;
               modal.style.display = "flex";
-
-              // Supprimer la photo après affichage
               db.ref("games/" + gameId + "/photos/" + winner).remove();
             }
           });
@@ -392,10 +427,11 @@
 
       // Rejouer
       function restartGame() {
-        grid = ["", "", "", "", "", "", "", "", ""];
+        grid = Array(gridSize * gridSize).fill("");
         db.ref("games/" + gameId).update({ grid: grid, turn: "X" });
         document.getElementById("winnerModal").style.display = "none";
-        document.getElementById("restartBtn").style.display = "none";
+        document.getElementById("restartBtn").style.display =
+          mode === "superkarim" ? "inline-block" : "none";
       }
     </script>
   </body>
