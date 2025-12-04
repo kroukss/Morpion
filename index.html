@@ -27,7 +27,7 @@
       }
     </style>
 
-    <!-- Firebase v9 compat (global) -->
+    <!-- Firebase v9 compat (global, pas de module) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
@@ -43,6 +43,7 @@
         appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
       };
 
+      // Initialisation Firebase
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database(); // global
     </script>
@@ -81,9 +82,11 @@
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
+
         player = "O";
         document.getElementById("status").innerText =
           "Vous êtes O — Partie : " + gameId;
+
         listenGame();
         renderBoard();
       }
@@ -92,9 +95,11 @@
       function listenGame() {
         db.ref("games/" + gameId).on("value", (snapshot) => {
           if (!snapshot.exists()) return;
+
           const data = snapshot.val();
           grid = data.grid;
           renderBoard();
+
           if (checkWin("X")) setTimeout(() => alert("X a gagné !"), 50);
           if (checkWin("O")) setTimeout(() => alert("O a gagné !"), 50);
         });
@@ -106,10 +111,12 @@
           .once("value")
           .then((snapshot) => {
             const data = snapshot.val();
-            if (data.grid[index] !== "") return;
+            if (!data || data.grid[index] !== "") return;
             if (data.turn !== player) return;
+
             data.grid[index] = player;
             data.turn = player === "X" ? "O" : "X";
+
             db.ref("games/" + gameId).set(data);
           });
       }
@@ -118,6 +125,7 @@
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
+
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
