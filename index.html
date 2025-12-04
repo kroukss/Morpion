@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Morpion Online</title>
+    <title>Morpion Online - IA</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
@@ -36,6 +36,12 @@
         background: #e0e0e0;
         transform: scale(1.05);
       }
+      .cell.x {
+        color: #1e90ff;
+      }
+      .cell.o {
+        color: #ff4136;
+      }
       input,
       button {
         padding: 10px;
@@ -59,9 +65,14 @@
         font-size: 1.2rem;
         color: #555;
       }
+      #turnStatus {
+        margin-top: 5px;
+        font-size: 1rem;
+        color: #777;
+      }
     </style>
 
-    <!-- Firebase v9 compat (global) -->
+    <!-- Firebase v9 compat -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
@@ -75,13 +86,12 @@
         messagingSenderId: "92135715792",
         appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
       };
-
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database();
     </script>
   </head>
   <body>
-    <h1>Morpion Online</h1>
+    <h1>Morpion Online - Jouez contre l'IA</h1>
 
     <div>
       <button onclick="createGame()">Créer une partie</button>
@@ -90,19 +100,19 @@
     </div>
 
     <h2 id="status"></h2>
+    <h3 id="turnStatus"></h3>
     <div id="board"></div>
 
     <script>
       let gameId = null;
-      let player = null;
+      let player = null; // X = humain
       let grid = ["", "", "", "", "", "", "", "", ""];
 
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
-        player = "X";
+        player = "X"; // joueur humain
         document.getElementById("status").innerText =
-          "Code de la partie : " + gameId;
-
+          "Code de la partie : " + gameId + " (Vous êtes X)";
         db.ref("games/" + gameId).set({ grid: grid, turn: "X" });
         listenGame();
         renderBoard();
@@ -111,11 +121,9 @@
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
-
-        player = "O";
+        player = "X"; // humain toujours X
         document.getElementById("status").innerText =
-          "Vous êtes O — Partie : " + gameId;
-
+          "Vous êtes X — Partie : " + gameId;
         listenGame();
         renderBoard();
       }
@@ -123,13 +131,22 @@
       function listenGame() {
         db.ref("games/" + gameId).on("value", (snapshot) => {
           if (!snapshot.exists()) return;
-
           const data = snapshot.val();
           grid = data.grid;
           renderBoard();
 
           if (checkWin("X")) setTimeout(() => alert("X a gagné !"), 50);
           if (checkWin("O")) setTimeout(() => alert("O a gagné !"), 50);
+
+          // Affichage du tour
+          const turnText =
+            data.turn === "X"
+              ? "Tour du joueur humain (X)"
+              : "Tour de l'IA (O)";
+          document.getElementById("turnStatus").innerText = turnText;
+
+          // Tour de l'IA
+          if (data.turn === "O") setTimeout(aiMove, 200);
         });
       }
 
@@ -142,8 +159,7 @@
             if (data.turn !== player) return;
 
             data.grid[index] = player;
-            data.turn = player === "X" ? "O" : "X";
-
+            data.turn = "O"; // tour IA après humain
             db.ref("games/" + gameId).set(data);
           });
       }
@@ -151,20 +167,20 @@
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
-
-        // adapter le nombre de colonnes au plateau 3x3
         board.style.gridTemplateColumns = "repeat(3, 1fr)";
 
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
+          if (grid[i] === "X") cell.classList.add("x");
+          if (grid[i] === "O") cell.classList.add("o");
           cell.textContent = grid[i];
           cell.onclick = () => play(i);
           board.appendChild(cell);
         }
       }
 
-      function checkWin(p) {
+      function checkWin(p, b = grid) {
         const wins = [
           [0, 1, 2],
           [3, 4, 5],
@@ -175,7 +191,51 @@
           [0, 4, 8],
           [2, 4, 6],
         ];
-        return wins.some((line) => line.every((i) => grid[i] === p));
+        return wins.some((line) => line.every((i) => b[i] === p));
+      }
+
+      // ================= IA invincible =================
+      function aiMove() {
+        if (checkWin("X") || checkWin("O") || grid.every((c) => c !== ""))
+          return;
+
+        const best = minimax(grid, "O");
+        const index = best.index;
+
+        db.ref("games/" + gameId)
+          .once("value")
+          .then((snapshot) => {
+            const data = snapshot.val();
+            if (!data || data.grid[index] !== "") return;
+
+            data.grid[index] = "O";
+            data.turn = "X"; // tour humain après IA
+            db.ref("games/" + gameId).set(data);
+          });
+      }
+
+      function minimax(board, playerTurn) {
+        const avail = board
+          .map((v, i) => (v === "" ? i : null))
+          .filter((v) => v !== null);
+
+        if (checkWin("X", board)) return { score: -10 };
+        if (checkWin("O", board)) return { score: 10 };
+        if (avail.length === 0) return { score: 0 };
+
+        const moves = [];
+
+        for (let i of avail) {
+          const newBoard = board.slice();
+          newBoard[i] = playerTurn;
+
+          const result = minimax(newBoard, playerTurn === "O" ? "X" : "O");
+          moves.push({ index: i, score: result.score });
+        }
+
+        if (playerTurn === "O")
+          return moves.reduce((a, b) => (a.score > b.score ? a : b));
+        else return moves.reduce((a, b) => (a.score < b.score ? a : b));
       }
     </script>
   </body>
