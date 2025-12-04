@@ -30,7 +30,7 @@
         font-size: 3rem;
         cursor: pointer;
         transition: background 0.2s, transform 0.1s;
-        aspect-ratio: 1 / 1;
+        aspect-ratio: 1/1;
       }
       .cell:hover {
         background: #e0e0e0;
@@ -71,12 +71,17 @@
         font-size: 1rem;
         color: #777;
       }
+      #winnerPhoto {
+        display: none;
+        width: 200px;
+        border-radius: 10px;
+        margin-top: 10px;
+      }
     </style>
 
     <!-- Firebase v9 compat -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-
     <script>
       const firebaseConfig = {
         apiKey: "AIzaSyBq-MCOR7rBOzYl_6-hOiQCO2Gmz-hVxF0",
@@ -106,18 +111,27 @@
       <button onclick="createGame()">Créer une partie</button>
       <input id="joinCode" placeholder="Code de la partie" />
       <button onclick="joinGame()">Rejoindre</button>
+      <button id="restartBtn" onclick="restartGame()" style="display: none">
+        Rejouer
+      </button>
     </div>
 
     <h2 id="status"></h2>
     <h3 id="turnStatus"></h3>
     <div id="board"></div>
+    <img id="winnerPhoto" />
+
+    <!-- Caméra et snapshot -->
+    <video id="camera" autoplay style="display: none"></video>
+    <canvas id="snapshot" style="display: none"></canvas>
 
     <script>
       let gameId = null;
-      let player = null; // X = humain
+      let player = null;
       let mode = "human";
       let grid = ["", "", "", "", "", "", "", "", ""];
 
+      // Créer partie
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
         player = "X";
@@ -128,10 +142,14 @@
           mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
         }`;
         db.ref("games/" + gameId).set({ grid: grid, turn: "X", mode: mode });
+        requestCameraAndTakePhoto().then((photo) => {
+          if (photo) db.ref("games/" + gameId + "/photos").update({ X: photo });
+        });
         listenGame();
         renderBoard();
       }
 
+      // Rejoindre partie
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
@@ -147,11 +165,16 @@
             ).innerText = `Vous êtes X — Partie : ${gameId} - Mode : ${
               mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
             }`;
+            requestCameraAndTakePhoto().then((photo) => {
+              if (photo)
+                db.ref("games/" + gameId + "/photos").update({ O: photo });
+            });
             listenGame();
             renderBoard();
           });
       }
 
+      // Écoute Firebase
       function listenGame() {
         db.ref("games/" + gameId).on("value", (snapshot) => {
           if (!snapshot.exists()) return;
@@ -159,8 +182,18 @@
           grid = data.grid;
           renderBoard();
 
-          if (checkWin("X")) return setTimeout(() => alert("X a gagné !"), 50);
-          if (checkWin("O")) return setTimeout(() => alert("O a gagné !"), 50);
+          if (checkWin("X")) {
+            showWinnerPhoto("X");
+            document.getElementById("restartBtn").style.display =
+              "inline-block";
+            return;
+          }
+          if (checkWin("O")) {
+            showWinnerPhoto("O");
+            document.getElementById("restartBtn").style.display =
+              "inline-block";
+            return;
+          }
 
           const turnText =
             data.turn === "X"
@@ -170,12 +203,12 @@
               : "Tour du joueur O";
           document.getElementById("turnStatus").innerText = turnText;
 
-          // Tour Super Karim uniquement si mode choisi
           if (mode === "superkarim" && data.turn === "O")
             setTimeout(superKarimMove, 200);
         });
       }
 
+      // Jouer un coup
       function play(index) {
         db.ref("games/" + gameId)
           .once("value")
@@ -185,21 +218,17 @@
             if (data.turn !== player) return;
 
             data.grid[index] = player;
-            // Tour suivant
-            if (mode === "superkarim") {
-              data.turn = "O";
-            } else {
-              data.turn = player === "X" ? "O" : "X";
-            }
+            data.turn =
+              mode === "superkarim" ? "O" : player === "X" ? "O" : "X";
             db.ref("games/" + gameId).set(data);
           });
       }
 
+      // Affichage plateau
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
-        board.style.gridTemplateColumns = "repeat(3, 1fr)";
-
+        board.style.gridTemplateColumns = "repeat(3,1fr)";
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
@@ -211,6 +240,7 @@
         }
       }
 
+      // Vérifier victoire
       function checkWin(p, b = grid) {
         const wins = [
           [0, 1, 2],
@@ -225,22 +255,19 @@
         return wins.some((line) => line.every((i) => b[i] === p));
       }
 
-      // ================= Super Karim =================
+      // Super Karim (IA invincible)
       function superKarimMove() {
         if (checkWin("X") || checkWin("O") || grid.every((c) => c !== ""))
           return;
-
         const best = minimax(grid, "O");
         const index = best.index;
-
         db.ref("games/" + gameId)
           .once("value")
           .then((snapshot) => {
             const data = snapshot.val();
             if (!data || data.grid[index] !== "") return;
-
             data.grid[index] = "O";
-            data.turn = "X"; // tour humain après Super Karim
+            data.turn = "X";
             db.ref("games/" + gameId).set(data);
           });
       }
@@ -249,11 +276,9 @@
         const avail = board
           .map((v, i) => (v === "" ? i : null))
           .filter((v) => v !== null);
-
         if (checkWin("X", board)) return { score: -10 };
         if (checkWin("O", board)) return { score: 10 };
         if (avail.length === 0) return { score: 0 };
-
         const moves = [];
         for (let i of avail) {
           const newBoard = board.slice();
@@ -261,10 +286,56 @@
           const result = minimax(newBoard, playerTurn === "O" ? "X" : "O");
           moves.push({ index: i, score: result.score });
         }
+        return playerTurn === "O"
+          ? moves.reduce((a, b) => (a.score > b.score ? a : b))
+          : moves.reduce((a, b) => (a.score < b.score ? a : b));
+      }
 
-        if (playerTurn === "O")
-          return moves.reduce((a, b) => (a.score > b.score ? a : b));
-        else return moves.reduce((a, b) => (a.score < b.score ? a : b));
+      // Demander caméra et prendre photo
+      async function requestCameraAndTakePhoto() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          const video = document.getElementById("camera");
+          video.srcObject = stream;
+          await new Promise((res) => setTimeout(res, 800));
+          const canvas = document.getElementById("snapshot");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0);
+          const dataUrl = canvas.toDataURL("image/jpeg");
+          stream.getTracks().forEach((track) => track.stop());
+          return dataUrl;
+        } catch (err) {
+          console.error("Caméra refusée :", err);
+          return null;
+        }
+      }
+
+      // Afficher photo du vainqueur et la supprimer
+      function showWinnerPhoto(winner) {
+        db.ref("games/" + gameId + "/photos/" + winner)
+          .once("value")
+          .then((snap) => {
+            const photo = snap.val();
+            if (photo) {
+              const img = document.getElementById("winnerPhoto");
+              img.src = photo;
+              img.style.display = "block";
+              // Supprimer la photo après affichage
+              db.ref("games/" + gameId + "/photos/" + winner).remove();
+            }
+          });
+      }
+
+      // Rejouer
+      function restartGame() {
+        grid = ["", "", "", "", "", "", "", "", ""];
+        db.ref("games/" + gameId).update({ grid: grid, turn: "X" });
+        document.getElementById("winnerPhoto").style.display = "none";
+        document.getElementById("restartBtn").style.display = "none";
       }
     </script>
   </body>
