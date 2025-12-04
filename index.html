@@ -71,11 +71,34 @@
         font-size: 1rem;
         color: #777;
       }
-      #winnerPhoto {
+
+      /* Modal du vainqueur */
+      #winnerModal {
         display: none;
-        width: 200px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+      #winnerContent {
+        background: #fff;
+        padding: 20px;
+        border-radius: 15px;
+        text-align: center;
+        position: relative;
+        max-width: 300px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+      #winnerContent img {
+        width: 100%;
         border-radius: 10px;
-        margin-top: 10px;
+        display: block;
+        margin: auto;
       }
     </style>
 
@@ -119,7 +142,14 @@
     <h2 id="status"></h2>
     <h3 id="turnStatus"></h3>
     <div id="board"></div>
-    <img id="winnerPhoto" />
+
+    <!-- Modal vainqueur -->
+    <div id="winnerModal">
+      <div id="winnerContent">
+        <h2>Gagnant</h2>
+        <img id="winnerPhoto" />
+      </div>
+    </div>
 
     <!-- Caméra et snapshot -->
     <video id="camera" autoplay style="display: none"></video>
@@ -134,7 +164,7 @@
       // Créer partie
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
-        player = "X"; // Créateur = X
+        player = "X";
         mode = document.getElementById("modeSelect").value;
         document.getElementById(
           "status"
@@ -168,7 +198,7 @@
             const data = snapshot.val();
             if (!data) return alert("Partie inexistante");
 
-            player = "O"; // Joueur qui rejoint = O
+            player = "O";
             mode = data.mode || "human";
             document.getElementById(
               "status"
@@ -310,7 +340,7 @@
           : moves.reduce((a, b) => (a.score < b.score ? a : b));
       }
 
-      // Demander caméra et prendre photo
+      // Caméra
       async function requestCameraAndTakePhoto() {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -333,26 +363,38 @@
         }
       }
 
-      // Afficher photo du vainqueur et supprimer
+      // Afficher photo pour les 2 joueurs
       function showWinnerPhoto(winner) {
         db.ref("games/" + gameId + "/photos/" + winner)
           .once("value")
           .then((snap) => {
             const photo = snap.val();
             if (photo) {
+              const modal = document.getElementById("winnerModal");
               const img = document.getElementById("winnerPhoto");
               img.src = photo;
-              img.style.display = "block";
+              modal.style.display = "flex";
+
+              // Supprimer la photo après affichage
               db.ref("games/" + gameId + "/photos/" + winner).remove();
             }
           });
       }
 
+      // Fermer modal clic hors photo
+      document
+        .getElementById("winnerModal")
+        .addEventListener("click", function (e) {
+          if (e.target.id === "winnerModal") {
+            this.style.display = "none";
+          }
+        });
+
       // Rejouer
       function restartGame() {
         grid = ["", "", "", "", "", "", "", "", ""];
         db.ref("games/" + gameId).update({ grid: grid, turn: "X" });
-        document.getElementById("winnerPhoto").style.display = "none";
+        document.getElementById("winnerModal").style.display = "none";
         document.getElementById("restartBtn").style.display = "none";
       }
     </script>
