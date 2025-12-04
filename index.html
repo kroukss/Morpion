@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Morpion Online</title>
+    <style>
+      body {
+        font-family: Arial;
+        text-align: center;
+        margin-top: 40px;
+      }
+      #board {
+        display: grid;
+        grid-template-columns: repeat(3, 100px);
+        gap: 5px;
+        margin: auto;
+      }
+      .cell {
+        width: 100px;
+        height: 100px;
+        background: #eee;
+        font-size: 60px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+      }
+    </style>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js"></script>
+  </head>
+  <body>
+    <h1>Morpion Online</h1>
+
+    <div>
+      <button onclick="createGame()">Créer une partie</button>
+      <input id="joinCode" placeholder="Code de la partie" />
+      <button onclick="joinGame()">Rejoindre</button>
+    </div>
+
+    <h2 id="status"></h2>
+    <div id="board"></div>
+
+    <script>
+      // ⚠️ Mets ici ton propre firebaseConfig
+      const firebaseConfig = {
+        apiKey: "AIzaSyBq-MCOR7rBOzYl_6-hOiQCO2Gmz-hVxF0",
+        authDomain: "morpion-online-29505.firebaseapp.com",
+        databaseURL: "https://morpion-online-29505-default-rtdb.firebaseio.com",
+        projectId: "morpion-online-29505",
+        storageBucket: "morpion-online-29505.firebasestorage.app",
+        messagingSenderId: "92135715792",
+        appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
+      };
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.database();
+
+      let gameId = null;
+      let player = null;
+      let grid = ["", "", "", "", "", "", "", "", ""];
+
+      function createGame() {
+        gameId = Math.random().toString(36).substr(2, 5);
+        player = "X";
+        document.getElementById("status").innerText =
+          "Code de la partie : " + gameId;
+
+        db.ref("games/" + gameId).set({ grid, turn: "X" });
+        listenGame();
+        renderBoard();
+      }
+
+      function joinGame() {
+        gameId = document.getElementById("joinCode").value;
+        player = "O";
+        document.getElementById("status").innerText = "Vous êtes O";
+
+        listenGame();
+        renderBoard();
+      }
+
+      function listenGame() {
+        db.ref("games/" + gameId).on("value", (snap) => {
+          if (!snap.exists()) return;
+          const data = snap.val();
+          grid = data.grid;
+          renderBoard();
+
+          if (checkWin("X")) alert("X a gagné !");
+          if (checkWin("O")) alert("O a gagné !");
+        });
+      }
+
+      function play(i) {
+        db.ref("games/" + gameId)
+          .once("value")
+          .then((snap) => {
+            const data = snap.val();
+            if (data.grid[i] !== "") return;
+            if (data.turn !== player) return;
+
+            data.grid[i] = player;
+            data.turn = player === "X" ? "O" : "X";
+
+            db.ref("games/" + gameId).set(data);
+          });
+      }
+
+      function renderBoard() {
+        const board = document.getElementById("board");
+        board.innerHTML = "";
+        for (let i = 0; i < 9; i++) {
+          const cell = document.createElement("div");
+          cell.classList.add("cell");
+          cell.textContent = grid[i];
+          cell.onclick = () => play(i);
+          board.appendChild(cell);
+        }
+      }
+
+      function checkWin(p) {
+        const wins = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8],
+          [0, 3, 6],
+          [1, 4, 7],
+          [2, 5, 8],
+          [0, 4, 8],
+          [2, 4, 6],
+        ];
+        return wins.some((w) => w.every((i) => grid[i] === p));
+      }
+    </script>
+  </body>
+</html>
