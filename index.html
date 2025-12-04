@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Morpion Online - IA</title>
+    <title>Morpion Online - Super Karim</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
@@ -43,7 +43,8 @@
         color: #ff4136;
       }
       input,
-      button {
+      button,
+      select {
         padding: 10px;
         margin: 5px;
         font-size: 1rem;
@@ -91,7 +92,15 @@
     </script>
   </head>
   <body>
-    <h1>Morpion Online - Jouez contre l'IA</h1>
+    <h1>Morpion Online - Super Karim</h1>
+
+    <div>
+      <label>Mode :</label>
+      <select id="modeSelect">
+        <option value="human">2 Joueurs</option>
+        <option value="superkarim">Contre Super Karim</option>
+      </select>
+    </div>
 
     <div>
       <button onclick="createGame()">Créer une partie</button>
@@ -106,14 +115,19 @@
     <script>
       let gameId = null;
       let player = null; // X = humain
+      let mode = "human";
       let grid = ["", "", "", "", "", "", "", "", ""];
 
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
-        player = "X"; // joueur humain
-        document.getElementById("status").innerText =
-          "Code de la partie : " + gameId + " (Vous êtes X)";
-        db.ref("games/" + gameId).set({ grid: grid, turn: "X" });
+        player = "X";
+        mode = document.getElementById("modeSelect").value;
+        document.getElementById(
+          "status"
+        ).innerText = `Code de la partie : ${gameId} (Vous êtes X) - Mode : ${
+          mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
+        }`;
+        db.ref("games/" + gameId).set({ grid: grid, turn: "X", mode: mode });
         listenGame();
         renderBoard();
       }
@@ -121,11 +135,21 @@
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
-        player = "X"; // humain toujours X
-        document.getElementById("status").innerText =
-          "Vous êtes X — Partie : " + gameId;
-        listenGame();
-        renderBoard();
+        player = "X";
+        db.ref("games/" + gameId)
+          .once("value")
+          .then((snapshot) => {
+            const data = snapshot.val();
+            if (!data) return alert("Partie inexistante");
+            mode = data.mode || "human";
+            document.getElementById(
+              "status"
+            ).innerText = `Vous êtes X — Partie : ${gameId} - Mode : ${
+              mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
+            }`;
+            listenGame();
+            renderBoard();
+          });
       }
 
       function listenGame() {
@@ -135,18 +159,20 @@
           grid = data.grid;
           renderBoard();
 
-          if (checkWin("X")) setTimeout(() => alert("X a gagné !"), 50);
-          if (checkWin("O")) setTimeout(() => alert("O a gagné !"), 50);
+          if (checkWin("X")) return setTimeout(() => alert("X a gagné !"), 50);
+          if (checkWin("O")) return setTimeout(() => alert("O a gagné !"), 50);
 
-          // Affichage du tour
           const turnText =
             data.turn === "X"
-              ? "Tour du joueur humain (X)"
-              : "Tour de l'IA (O)";
+              ? "Tour du joueur X"
+              : mode === "superkarim"
+              ? "Tour de Super Karim (O)"
+              : "Tour du joueur O";
           document.getElementById("turnStatus").innerText = turnText;
 
-          // Tour de l'IA
-          if (data.turn === "O") setTimeout(aiMove, 200);
+          // Tour Super Karim uniquement si mode choisi
+          if (mode === "superkarim" && data.turn === "O")
+            setTimeout(superKarimMove, 200);
         });
       }
 
@@ -159,7 +185,12 @@
             if (data.turn !== player) return;
 
             data.grid[index] = player;
-            data.turn = "O"; // tour IA après humain
+            // Tour suivant
+            if (mode === "superkarim") {
+              data.turn = "O";
+            } else {
+              data.turn = player === "X" ? "O" : "X";
+            }
             db.ref("games/" + gameId).set(data);
           });
       }
@@ -194,8 +225,8 @@
         return wins.some((line) => line.every((i) => b[i] === p));
       }
 
-      // ================= IA invincible =================
-      function aiMove() {
+      // ================= Super Karim =================
+      function superKarimMove() {
         if (checkWin("X") || checkWin("O") || grid.every((c) => c !== ""))
           return;
 
@@ -209,7 +240,7 @@
             if (!data || data.grid[index] !== "") return;
 
             data.grid[index] = "O";
-            data.turn = "X"; // tour humain après IA
+            data.turn = "X"; // tour humain après Super Karim
             db.ref("games/" + gameId).set(data);
           });
       }
@@ -224,11 +255,9 @@
         if (avail.length === 0) return { score: 0 };
 
         const moves = [];
-
         for (let i of avail) {
           const newBoard = board.slice();
           newBoard[i] = playerTurn;
-
           const result = minimax(newBoard, playerTurn === "O" ? "X" : "O");
           moves.push({ index: i, score: result.score });
         }
