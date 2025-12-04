@@ -27,9 +27,27 @@
       }
     </style>
 
-    <!-- Firebase v8 (compatibilité totale avec l'exemple) -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- Firebase v9 compat pour GitHub Pages -->
+    <script type="module">
+      import firebase from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js";
+      import "https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBq-MCOR7rBOzYl_6-hOiQCO2Gmz-hVxF0",
+        authDomain: "morpion-online-29505.firebaseapp.com",
+        databaseURL: "https://morpion-online-29505-default-rtdb.firebaseio.com",
+        projectId: "morpion-online-29505",
+        storageBucket: "morpion-online-29505.firebasestorage.app",
+        messagingSenderId: "92135715792",
+        appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
+      };
+
+      firebase.initializeApp(firebaseConfig);
+
+      // rendre firebase et db disponibles globalement
+      window.firebase = firebase;
+      window.db = firebase.database();
+    </script>
   </head>
   <body>
     <h1>Morpion Online</h1>
@@ -44,115 +62,64 @@
     <div id="board"></div>
 
     <script>
-      /* ==========================================================
-    CONFIG FIREBASE
-   ----------------------------------------------------------
-   Mets ici ton propre firebaseConfig
-   ========================================================== */
-
-      const firebaseConfig = {
-        apiKey: "AIzaSyBq-MCOR7rBOzYl_6-hOiQCO2Gmz-hVxF0",
-        authDomain: "morpion-online-29505.firebaseapp.com",
-        databaseURL: "https://morpion-online-29505-default-rtdb.firebaseio.com",
-        projectId: "morpion-online-29505",
-        storageBucket: "morpion-online-29505.firebasestorage.app",
-        messagingSenderId: "92135715792",
-        appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
-      };
-
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.database();
-
-      /* ==========================================================
-    VARIABLES GLOBALES (⚠️ doivent être ici !)
-   ========================================================== */
-
+      // Variables globales
       let gameId = null;
       let player = null;
       let grid = ["", "", "", "", "", "", "", "", ""];
 
-      /* ==========================================================
-    CRÉER UNE PARTIE
-   ========================================================== */
-
+      // Créer une partie
       function createGame() {
-        gameId = Math.random().toString(36).substr(2, 5); // code de 5 caractères
+        gameId = Math.random().toString(36).substr(2, 5);
         player = "X";
-
         document.getElementById("status").innerText =
           "Code de la partie : " + gameId;
 
-        db.ref("games/" + gameId).set({
-          grid: grid,
-          turn: "X",
-        });
-
+        db.ref("games/" + gameId).set({ grid: grid, turn: "X" });
         listenGame();
         renderBoard();
       }
 
-      /* ==========================================================
-    REJOINDRE UNE PARTIE
-   ========================================================== */
-
+      // Rejoindre une partie
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
-
         player = "O";
         document.getElementById("status").innerText =
           "Vous êtes O — Partie : " + gameId;
-
         listenGame();
         renderBoard();
       }
 
-      /* ==========================================================
-    ÉCOUTE TEMPS RÉEL FIREBASE
-   ========================================================== */
-
+      // Écoute temps réel Firebase
       function listenGame() {
         db.ref("games/" + gameId).on("value", (snapshot) => {
           if (!snapshot.exists()) return;
-
           const data = snapshot.val();
           grid = data.grid;
-
           renderBoard();
-
           if (checkWin("X")) setTimeout(() => alert("X a gagné !"), 50);
           if (checkWin("O")) setTimeout(() => alert("O a gagné !"), 50);
         });
       }
 
-      /* ==========================================================
-    JOUER UN COUP
-   ========================================================== */
-
+      // Jouer un coup
       function play(index) {
         db.ref("games/" + gameId)
           .once("value")
           .then((snapshot) => {
             const data = snapshot.val();
-
-            if (data.grid[index] !== "") return; // case déjà jouée
-            if (data.turn !== player) return; // pas ton tour
-
+            if (data.grid[index] !== "") return;
+            if (data.turn !== player) return;
             data.grid[index] = player;
             data.turn = player === "X" ? "O" : "X";
-
             db.ref("games/" + gameId).set(data);
           });
       }
 
-      /* ==========================================================
-    AFFICHAGE DU PLATEAU
-   ========================================================== */
-
+      // Affichage du plateau
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
-
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
@@ -162,10 +129,7 @@
         }
       }
 
-      /* ==========================================================
-    DÉTECTION VICTOIRE
-   ========================================================== */
-
+      // Détection victoire
       function checkWin(p) {
         const wins = [
           [0, 1, 2],
