@@ -134,17 +134,25 @@
       // Créer partie
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
-        player = "X";
+        player = "X"; // Créateur = X
         mode = document.getElementById("modeSelect").value;
         document.getElementById(
           "status"
         ).innerText = `Code de la partie : ${gameId} (Vous êtes X) - Mode : ${
           mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
         }`;
-        db.ref("games/" + gameId).set({ grid: grid, turn: "X", mode: mode });
+
+        db.ref("games/" + gameId).set({
+          grid: grid,
+          turn: "X",
+          mode: mode,
+          players: { X: true },
+        });
+
         requestCameraAndTakePhoto().then((photo) => {
           if (photo) db.ref("games/" + gameId + "/photos").update({ X: photo });
         });
+
         listenGame();
         renderBoard();
       }
@@ -153,22 +161,28 @@
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
-        player = "X";
+
         db.ref("games/" + gameId)
           .once("value")
           .then((snapshot) => {
             const data = snapshot.val();
             if (!data) return alert("Partie inexistante");
+
+            player = "O"; // Joueur qui rejoint = O
             mode = data.mode || "human";
             document.getElementById(
               "status"
-            ).innerText = `Vous êtes X — Partie : ${gameId} - Mode : ${
+            ).innerText = `Vous êtes O — Partie : ${gameId} - Mode : ${
               mode === "superkarim" ? "Contre Super Karim" : "2 Joueurs"
             }`;
+
+            db.ref("games/" + gameId + "/players").update({ O: true });
+
             requestCameraAndTakePhoto().then((photo) => {
               if (photo)
                 db.ref("games/" + gameId + "/photos").update({ O: photo });
             });
+
             listenGame();
             renderBoard();
           });
@@ -219,7 +233,12 @@
 
             data.grid[index] = player;
             data.turn =
-              mode === "superkarim" ? "O" : player === "X" ? "O" : "X";
+              mode === "superkarim" && player === "X"
+                ? "O"
+                : player === "X"
+                ? "O"
+                : "X";
+
             db.ref("games/" + gameId).set(data);
           });
       }
@@ -314,7 +333,7 @@
         }
       }
 
-      // Afficher photo du vainqueur et la supprimer
+      // Afficher photo du vainqueur et supprimer
       function showWinnerPhoto(winner) {
         db.ref("games/" + gameId + "/photos/" + winner)
           .once("value")
@@ -324,7 +343,6 @@
               const img = document.getElementById("winnerPhoto");
               img.src = photo;
               img.style.display = "block";
-              // Supprimer la photo après affichage
               db.ref("games/" + gameId + "/photos/" + winner).remove();
             }
           });
