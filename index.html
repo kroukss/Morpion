@@ -3,36 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <title>Morpion Online</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
-        font-family: Arial;
+        font-family: Arial, sans-serif;
         text-align: center;
-        margin-top: 40px;
+        margin: 20px;
+        background: #f2f2f2;
+      }
+      h1 {
+        color: #333;
       }
       #board {
         display: grid;
-        grid-template-columns: repeat(3, 100px);
         gap: 5px;
-        margin: auto;
+        margin: 20px auto;
+        max-width: 400px;
       }
       .cell {
-        width: 100px;
-        height: 100px;
-        background: #eee;
-        font-size: 60px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         display: flex;
         justify-content: center;
         align-items: center;
+        font-size: 3rem;
         cursor: pointer;
+        transition: background 0.2s, transform 0.1s;
+        aspect-ratio: 1 / 1;
+      }
+      .cell:hover {
+        background: #e0e0e0;
+        transform: scale(1.05);
+      }
+      input,
+      button {
+        padding: 10px;
+        margin: 5px;
+        font-size: 1rem;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+      }
+      button {
+        cursor: pointer;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      #status {
+        margin-top: 15px;
+        font-size: 1.2rem;
+        color: #555;
       }
     </style>
 
-    <!-- Firebase v9 compat (global, pas de module) -->
+    <!-- Firebase v9 compat (global) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
     <script>
-      // CONFIG FIREBASE
       const firebaseConfig = {
         apiKey: "AIzaSyBq-MCOR7rBOzYl_6-hOiQCO2Gmz-hVxF0",
         authDomain: "morpion-online-29505.firebaseapp.com",
@@ -43,9 +76,8 @@
         appId: "1:92135715792:web:9030af9eecd8e4fac93fd5",
       };
 
-      // Initialisation Firebase
       firebase.initializeApp(firebaseConfig);
-      const db = firebase.database(); // global
+      const db = firebase.database();
     </script>
   </head>
   <body>
@@ -61,12 +93,10 @@
     <div id="board"></div>
 
     <script>
-      // Variables globales
       let gameId = null;
       let player = null;
       let grid = ["", "", "", "", "", "", "", "", ""];
 
-      // Créer une partie
       function createGame() {
         gameId = Math.random().toString(36).substr(2, 5);
         player = "X";
@@ -78,7 +108,6 @@
         renderBoard();
       }
 
-      // Rejoindre une partie
       function joinGame() {
         gameId = document.getElementById("joinCode").value.trim();
         if (!gameId) return alert("Entre un code valide");
@@ -91,7 +120,6 @@
         renderBoard();
       }
 
-      // Écoute temps réel Firebase
       function listenGame() {
         db.ref("games/" + gameId).on("value", (snapshot) => {
           if (!snapshot.exists()) return;
@@ -105,7 +133,6 @@
         });
       }
 
-      // Jouer un coup
       function play(index) {
         db.ref("games/" + gameId)
           .once("value")
@@ -121,10 +148,12 @@
           });
       }
 
-      // Affichage du plateau
       function renderBoard() {
         const board = document.getElementById("board");
         board.innerHTML = "";
+
+        // adapter le nombre de colonnes au plateau 3x3
+        board.style.gridTemplateColumns = "repeat(3, 1fr)";
 
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
@@ -135,7 +164,6 @@
         }
       }
 
-      // Détection victoire
       function checkWin(p) {
         const wins = [
           [0, 1, 2],
